@@ -60,7 +60,7 @@ class AnndataAdaptor(DataAdaptor):
         return corpora_get_props_from_anndata(self.data)
 
     def get_name(self):
-        return "cellxgene anndata adaptor version"
+        return "proteinxlocation anndata adaptor version"
 
     def get_library_versions(self):
         return dict(anndata=str(anndata.__version__))

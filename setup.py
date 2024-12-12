@@ -13,7 +13,7 @@ with open("server/requirements-annotate.txt") as fh:
     requirements_annotate = fh.read().splitlines()
 
 setup(
-    name="cellxgene",
+    name="proteinxlocation",
     version="1.3.0",
     packages=find_packages(),
     url="https://github.com/chanzuckerberg/cellxgene",
