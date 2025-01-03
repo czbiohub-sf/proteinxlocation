@@ -2,8 +2,8 @@ import logging
 import sys
 from server.common.utils.utils import import_plugins
 
-__version__ = "1.3.0"
-display_version = "cellxgene v" + __version__
+__version__ = "0.0.1"
+display_version = "proteinxlocation v" + __version__
 
 try:
     import_plugins("server.plugins")
