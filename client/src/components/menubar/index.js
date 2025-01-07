@@ -42,6 +42,7 @@ import { getEmbSubsetView } from "../../util/stateManager/viewStackHelpers";
     diffexpMayBeSlow:
       state.config?.parameters?.["diffexp-may-be-slow"] ?? false,
     showCentroidLabels: state.centroidLabels.showLabels,
+    isProteinHoverEnabled: state.proteinHover?.isEnabled ?? false,
     tosURL: state.config?.parameters?.about_legal_tos,
     privacyURL: state.config?.parameters?.about_legal_privacy,
     categoricalSelection: state.categoricalSelection,
@@ -131,6 +132,14 @@ class MenuBar extends React.PureComponent {
     });
   };
 
+  handleProteinHoverToggle = () => {
+    const { dispatch, isProteinHoverEnabled } = this.props;
+    dispatch({
+      type: "toggle protein hover",
+      payload: { enableProteinHover: !isProteinHoverEnabled },
+    });
+  };
+
   handleClipPercentileMaxValueChange = (v) => {
     /*
     Ignore anything that isn't a legit number
@@ -202,6 +211,7 @@ class MenuBar extends React.PureComponent {
       clipPercentileMax,
       graphInteractionMode,
       showCentroidLabels,
+      isProteinHoverEnabled,
       categoricalSelection,
       colorAccessor,
       subsetPossible,
@@ -265,6 +275,22 @@ class MenuBar extends React.PureComponent {
             onClick={this.handleCentroidChange}
             active={showCentroidLabels}
             intent={showCentroidLabels ? "primary" : "none"}
+            disabled={!isColoredByCategorical}
+          />
+        </Tooltip>
+        <Tooltip
+          content="Click to enable hovering over proteins to reveal their names"
+          position="bottom"
+          disabled={graphInteractionMode === "zoom"}
+        >
+          <AnchorButton
+            className={styles.menubarButton}
+            type="button"
+            data-testid="protein-hover-toggle"
+            icon="hand-up"
+            onClick={this.handleProteinHoverToggle}
+            active={isProteinHoverEnabled}
+            intent={isProteinHoverEnabled ? "primary" : "none"}
             disabled={!isColoredByCategorical}
           />
         </Tooltip>
