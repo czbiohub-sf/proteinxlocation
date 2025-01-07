@@ -19,6 +19,7 @@ import genesetsUI from "./genesetsUI";
 import autosave from "./autosave";
 import centroidLabels from "./centroidLabels";
 import pointDialation from "./pointDilation";
+import proteinHover from "./proteinHover";
 import { gcMiddleware as annoMatrixGC } from "../annoMatrix";
 
 import undoableConfig from "./undoableConfig";
@@ -40,6 +41,7 @@ const Reducer = undoable(
     ["differential", differential],
     ["centroidLabels", centroidLabels],
     ["pointDilation", pointDialation],
+    ["proteinHover", proteinHover],
     ["autosave", autosave],
   ]),
   [
