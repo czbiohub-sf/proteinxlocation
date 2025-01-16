@@ -18,6 +18,7 @@ import * as globals from "../../globals";
 
 import GraphOverlayLayer from "./overlays/graphOverlayLayer";
 import CentroidLabels from "./overlays/centroidLabels";
+import HoverProteinLabels from "./overlays/hoverProteinLabels";
 import actions from "../../actions";
 import renderThrottle from "../../util/renderThrottle";
 
@@ -26,6 +27,7 @@ import {
   flagSelected,
   flagHighlight,
 } from "../../util/glHelpers";
+import calcCentroid from "../../util/centroid";
 
 /*
 Simple 2D transforms control all point painting.  There are three:
@@ -77,6 +79,7 @@ function createModelTF() {
   colors: state.colors,
   pointDilation: state.pointDilation,
   genesets: state.genesets.genesets,
+  proteinHover: state.proteinHover,
 }))
 class Graph extends React.Component {
   static createReglState(canvas) {
@@ -256,8 +259,12 @@ class Graph extends React.Component {
   }
 
   componentDidUpdate(prevProps, prevState) {
-    const { selectionTool, currentSelection, graphInteractionMode } =
-      this.props;
+    const {
+      selectionTool,
+      currentSelection,
+      graphInteractionMode,
+      proteinHover,
+    } = this.props;
     const { toolSVG, viewport } = this.state;
     const hasResized =
       prevState.viewport.height !== viewport.height ||
@@ -291,6 +298,16 @@ class Graph extends React.Component {
         stateChanges.container ? stateChanges.container : container
       );
     }
+
+    if (proteinHover?.isEnabled && proteinHover !== prevProps.proteinHover) {
+      this.enableProteinHover();
+    } else if (
+      !proteinHover?.isEnabled &&
+      proteinHover !== prevProps.proteinHover
+    ) {
+      this.disableProteinHover();
+    }
+
     if (Object.keys(stateChanges).length > 0) {
       // eslint-disable-next-line react/no-did-update-set-state --- Preventing update loop via stateChanges and diff checks
       this.setState(stateChanges);
@@ -300,6 +317,90 @@ class Graph extends React.Component {
   componentWillUnmount() {
     window.removeEventListener("resize", this.handleResize);
   }
+
+  /**
+   * Handles the hover event for proteins on the graph.
+   * This function determines the nearest protein to the mouse cursor
+   * based on the transformed coordinates of the plotted data points.
+   *
+   * It converts the mouse position from screen coordinates to data space,
+   * calculates the nearest centroid, and dispatches an action to update the
+   * hovered protein state if the distance is within a predefined threshold.
+   *
+   * @param {MouseEvent} event - The mouse event triggered by hovering over the graph.
+   */
+  handleProteinHover = async (event) => {
+    const { dispatch, annoMatrix, layoutChoice, colors } = this.props;
+
+    if (!annoMatrix || !layoutChoice?.current || !colors?.colorAccessor) return;
+
+    // Get the Regl (WebGL) canvas dimensions
+    const rect = this.reglCanvas.getBoundingClientRect();
+
+    // Capture the mouse coordinates relative to the canvas (in pixels)
+    const mouseX = event.clientX - rect.left;
+    const mouseY = event.clientY - rect.top;
+
+    // Convert mouse coordinates to the data space used for centroids
+    const dataXY = this.mapScreenToPoint([mouseX, mouseY]);
+
+    const threshold = 0.002; // Fine adjustment for hover precision
+
+    try {
+      // Determine the correct query for colorByQuery
+      const query = this.colorByQuery();
+
+      if (!query) {
+        console.error("❌ Invalid query for colorByQuery function.");
+        return;
+      }
+
+      // Fetch the layout and color data using the query
+      const [layoutDf, colorDf] = await Promise.all([
+        annoMatrix.fetch("emb", layoutChoice.current),
+        annoMatrix.fetch(...query),
+      ]);
+
+      // Calculate centroids for proteins
+      const centroids = calcCentroid(
+        annoMatrix.schema,
+        colors.colorAccessor,
+        colorDf,
+        layoutChoice,
+        layoutDf
+      );
+
+      // Identify the nearest protein point
+      let foundProteinName = null;
+      let foundCoordinates = null;
+      let minDist = Infinity;
+
+      centroids.forEach((coords, labelName) => {
+        const dx = coords[0] - dataXY[0];
+        const dy = coords[1] - dataXY[1];
+        const dist = Math.hypot(dx, dy);
+
+        if (dist < minDist) {
+          minDist = dist;
+          foundProteinName = labelName;
+          foundCoordinates = coords;
+        }
+      });
+
+      // Dispatch hover actions
+      if (minDist < threshold && foundProteinName && foundCoordinates) {
+        dispatch({
+          type: "protein hover start",
+          payload: { protein: foundProteinName, coordinates: foundCoordinates },
+        });
+      } else {
+        dispatch({ type: "protein hover end" });
+      }
+    } catch (error) {
+      console.error("❌ Error while processing protein hover:", error);
+      dispatch({ type: "protein hover end" });
+    }
+  };
 
   handleResize = () => {
     const { state } = this.state;
@@ -446,6 +547,23 @@ class Graph extends React.Component {
     });
   }
 
+  enableProteinHover = () => {
+    const { dispatch } = this.props;
+    if (this.reglCanvas) {
+      this.reglCanvas.addEventListener("mousemove", this.handleProteinHover);
+      this.reglCanvas.addEventListener("mouseout", () => {
+        dispatch({ type: "protein hover end" });
+      });
+    }
+  };
+
+  disableProteinHover = () => {
+    if (this.reglCanvas) {
+      this.reglCanvas.removeEventListener("mousemove", this.handleProteinHover);
+      this.reglCanvas.removeEventListener("mouseout", this.handleProteinHover);
+    }
+  };
+
   setReglCanvas = (canvas) => {
     this.reglCanvas = canvas;
     this.setState({
@@ -563,6 +681,13 @@ class Graph extends React.Component {
       height,
     };
   };
+
+  colorByQuery() {
+    const { annoMatrix, colors, genesets } = this.props;
+    const { schema } = annoMatrix;
+    const { colorMode, colorAccessor } = colors;
+    return createColorQuery(colorMode, colorAccessor, schema, genesets);
+  }
 
   async fetchData(annoMatrix, layoutChoice, colors, pointDilation) {
     /*
@@ -859,7 +984,9 @@ class Graph extends React.Component {
           }
         >
           <CentroidLabels />
+          <HoverProteinLabels />
         </GraphOverlayLayer>
+
         <svg
           id="lasso-layer"
           data-testid="layout-overlay"
