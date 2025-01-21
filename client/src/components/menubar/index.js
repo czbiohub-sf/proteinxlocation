@@ -42,6 +42,7 @@ import { getEmbSubsetView } from "../../util/stateManager/viewStackHelpers";
     diffexpMayBeSlow:
       state.config?.parameters?.["diffexp-may-be-slow"] ?? false,
     showCentroidLabels: state.centroidLabels.showLabels,
+    isProteinHoverEnabled: state.proteinHover.isEnabled, // Adicionado para seguir o padrão existente
     tosURL: state.config?.parameters?.about_legal_tos,
     privacyURL: state.config?.parameters?.about_legal_privacy,
     categoricalSelection: state.categoricalSelection,
@@ -49,22 +50,9 @@ import { getEmbSubsetView } from "../../util/stateManager/viewStackHelpers";
 })
 class MenuBar extends React.PureComponent {
   static isValidDigitKeyEvent(e) {
-    /*
-    Return true if this event is necessary to enter a percent number input.
-    Return false if not.
-
-    Returns true for events with keys: backspace, control, alt, meta, [0-9],
-    or events that don't have a key.
-    */
     if (e.key === null) return true;
     if (e.ctrlKey || e.altKey || e.metaKey) return true;
 
-    // concept borrowed from blueprint's numericInputUtils:
-    // keys that print a single character when pressed have a `key` name of
-    // length 1. every other key has a longer `key` name (e.g. "Backspace",
-    // "ArrowUp", "Shift"). since none of those keys can print a character
-    // to the field--and since they may have important native behaviors
-    // beyond printing a character--we don't want to disable their effects.
     const isSingleCharKey = e.key.length === 1;
     if (!isSingleCharKey) return true;
 
@@ -80,9 +68,6 @@ class MenuBar extends React.PureComponent {
   }
 
   isClipDisabled = () => {
-    /*
-    return true if clip button should be disabled.
-    */
     const { pendingClipPercentiles } = this.state;
     const clipPercentileMin = pendingClipPercentiles?.clipPercentileMin;
     const clipPercentileMax = pendingClipPercentiles?.clipPercentileMax;
@@ -91,8 +76,6 @@ class MenuBar extends React.PureComponent {
       clipPercentileMax: currentClipMax,
     } = this.props;
 
-    // if you change this test, be careful with logic around
-    // comparisons between undefined / NaN handling.
     const isDisabled =
       !(clipPercentileMin < clipPercentileMax) ||
       (clipPercentileMin === currentClipMin &&
@@ -102,50 +85,34 @@ class MenuBar extends React.PureComponent {
   };
 
   handleClipOnKeyPress = (e) => {
-    /*
-    allow only numbers, plus other critical keys which
-    may be required to make a number
-    */
     if (!MenuBar.isValidDigitKeyEvent(e)) {
       e.preventDefault();
     }
   };
 
   handleClipPercentileMinValueChange = (v) => {
-    /*
-    Ignore anything that isn't a legit number
-    */
     if (!Number.isFinite(v)) return;
 
     const { pendingClipPercentiles } = this.state;
     const clipPercentileMax = pendingClipPercentiles?.clipPercentileMax;
 
-    /*
-    clamp to [0, currentClipPercentileMax]
-    */
     if (v <= 0) v = 0;
     if (v > 100) v = 100;
-    const clipPercentileMin = Math.round(v); // paranoia
+    const clipPercentileMin = Math.round(v);
     this.setState({
       pendingClipPercentiles: { clipPercentileMin, clipPercentileMax },
     });
   };
 
   handleClipPercentileMaxValueChange = (v) => {
-    /*
-    Ignore anything that isn't a legit number
-    */
     if (!Number.isFinite(v)) return;
 
     const { pendingClipPercentiles } = this.state;
     const clipPercentileMin = pendingClipPercentiles?.clipPercentileMin;
 
-    /*
-    clamp to [0, 100]
-    */
     if (v < 0) v = 0;
     if (v > 100) v = 100;
-    const clipPercentileMax = Math.round(v); // paranoia
+    const clipPercentileMax = Math.round(v);
 
     this.setState({
       pendingClipPercentiles: { clipPercentileMin, clipPercentileMax },
@@ -181,6 +148,15 @@ class MenuBar extends React.PureComponent {
     });
   };
 
+  handleProteinHoverToggle = () => {
+    const { dispatch, isProteinHoverEnabled } = this.props;
+
+    dispatch({
+      type: "toggle protein hover",
+      payload: { enableProteinHover: !isProteinHoverEnabled },
+    });
+  };
+
   handleSubset = () => {
     const { dispatch } = this.props;
     dispatch(actions.subsetAction());
@@ -202,6 +178,7 @@ class MenuBar extends React.PureComponent {
       clipPercentileMax,
       graphInteractionMode,
       showCentroidLabels,
+      isProteinHoverEnabled,
       categoricalSelection,
       colorAccessor,
       subsetPossible,
@@ -211,7 +188,6 @@ class MenuBar extends React.PureComponent {
 
     const isColoredByCategorical = !!categoricalSelection?.[colorAccessor];
 
-    // constants used to create selection tool button
     const [selectionTooltip, selectionButtonIcon] =
       selectionTool === "brush"
         ? ["Brush selection", "Lasso selection"]
@@ -265,6 +241,22 @@ class MenuBar extends React.PureComponent {
             onClick={this.handleCentroidChange}
             active={showCentroidLabels}
             intent={showCentroidLabels ? "primary" : "none"}
+            disabled={!isColoredByCategorical}
+          />
+        </Tooltip>
+        <Tooltip
+          content="Click to enable hovering over proteins to reveal their names"
+          position="bottom"
+          disabled={graphInteractionMode === "zoom"}
+        >
+          <AnchorButton
+            className={styles.menubarButton}
+            type="button"
+            data-testid="protein-hover-toggle"
+            icon="hand-up"
+            onClick={this.handleProteinHoverToggle}
+            active={isProteinHoverEnabled}
+            intent={isProteinHoverEnabled ? "primary" : "none"}
             disabled={!isColoredByCategorical}
           />
         </Tooltip>

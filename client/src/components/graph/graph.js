@@ -18,6 +18,7 @@ import * as globals from "../../globals";
 
 import GraphOverlayLayer from "./overlays/graphOverlayLayer";
 import CentroidLabels from "./overlays/centroidLabels";
+import ProteinLabels from "./overlays/proteinLabels";
 import actions from "../../actions";
 import renderThrottle from "../../util/renderThrottle";
 
@@ -313,6 +314,7 @@ class Graph extends React.Component {
   };
 
   handleCanvasEvent = (e) => {
+    console.log("e = ", e);
     const { camera, projectionTF } = this.state;
     if (e.type !== "wheel") e.preventDefault();
     if (camera.handleEvent(e, projectionTF)) {
@@ -823,6 +825,8 @@ class Graph extends React.Component {
       projView,
       nPoints: schema.dataframe.nObs,
       minViewportDimension: Math.min(width, height),
+      onMouseOver: this.handleMouseOverPoint, // Passa o evento de hover
+      onMouseOut: this.handleMouseOutPoint, // Passa o evento de sair do hover
     });
     regl._gl.flush();
   }
@@ -836,7 +840,9 @@ class Graph extends React.Component {
       pointDilation,
       crossfilter,
     } = this.props;
-    const { modelTF, projectionTF, camera, viewport, regl } = this.state;
+    const { modelTF, hoveredProtein, projectionTF, camera, viewport, regl } =
+      this.state;
+    const { points } = this.props;
     const cameraTF = camera?.view()?.slice();
 
     return (
@@ -859,6 +865,11 @@ class Graph extends React.Component {
           }
         >
           <CentroidLabels />
+          <ProteinLabels
+            hoveredProtein={hoveredProtein}
+            points={points}
+            projectionTF={projectionTF}
+          />
         </GraphOverlayLayer>
         <svg
           id="lasso-layer"

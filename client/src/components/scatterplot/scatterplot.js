@@ -46,6 +46,7 @@ const getYScale = memoize(getScale);
     annoMatrix: state.annoMatrix,
     colors: state.colors,
     pointDilation: state.pointDilation,
+    proteinHover: state.proteinHover,
 
     // Accessors are var/sample names (strings)
     scatterplotXXaccessor,
@@ -231,6 +232,22 @@ class Scatterplot extends React.PureComponent {
     });
   };
 
+  handleMouseOverPoint = (proteinName) => {
+    const { dispatch } = this.props;
+    console.log("proteinName", proteinName);
+    dispatch({
+      type: "protein hover start",
+      payload: { protein: proteinName },
+    });
+  };
+
+  handleMouseOutPoint = () => {
+    const { dispatch } = this.props;
+    dispatch({
+      type: "protein hover end",
+    });
+  };
+
   fetchAsyncProps = async (props) => {
     const {
       scatterplotXXaccessor,
@@ -400,8 +417,8 @@ class Scatterplot extends React.PureComponent {
     pointBuffer,
     projectionTF
   ) {
-    const { annoMatrix } = this.props;
-    if (!this.reglCanvas || !annoMatrix) return;
+    const { annoMatrix, proteinHover } = this.props;
+    if (!this.reglCanvas || !annoMatrix || !proteinHover.isEnabled) return;
 
     const { schema } = annoMatrix;
     const { viewport } = this.state;
@@ -410,6 +427,39 @@ class Scatterplot extends React.PureComponent {
       depth: 1,
       color: [1, 1, 1, 1],
     });
+
+    // Adicionando interação com hover para proteínas
+    const mouseHandler = (event) => {
+      const { offsetX, offsetY } = event;
+      const [dataX, dataY] = this.mapScreenToPoint([offsetX, offsetY]);
+      console.log("Mouse coordinates:", dataX, dataY);
+
+      let closestPoint = null;
+      let minDistance = Infinity;
+
+      const points = annoMatrix.getPoints();
+      console.log("Points in the graph:", points);
+
+      points.forEach((point) => {
+        const distance = Math.sqrt(
+          (point.x - dataX) ** 2 + (point.y - dataY) ** 2
+        );
+        if (distance < minDistance && distance < 10) {
+          minDistance = distance;
+          closestPoint = point;
+        }
+      });
+
+      if (closestPoint) {
+        console.log("Closest point:", closestPoint);
+        this.handleMouseOverPoint(closestPoint.proteinName);
+      } else {
+        this.handleMouseOutPoint();
+      }
+    };
+
+    this.reglCanvas.addEventListener("mousemove", mouseHandler);
+
     drawPoints({
       flag: flagBuffer,
       color: colorBuffer,
