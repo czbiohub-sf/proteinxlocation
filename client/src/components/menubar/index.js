@@ -133,7 +133,15 @@ class MenuBar extends React.PureComponent {
   };
 
   handleProteinHoverToggle = () => {
-    const { dispatch, isProteinHoverEnabled } = this.props;
+    const { dispatch, isProteinHoverEnabled, showCentroidLabels } = this.props;
+
+    if (!isProteinHoverEnabled && showCentroidLabels) {
+      dispatch({
+        type: "show centroid labels for category",
+        showLabels: false,
+      });
+    }
+
     dispatch({
       type: "toggle protein hover",
       payload: { enableProteinHover: !isProteinHoverEnabled },
@@ -182,7 +190,14 @@ class MenuBar extends React.PureComponent {
   };
 
   handleCentroidChange = () => {
-    const { dispatch, showCentroidLabels } = this.props;
+    const { dispatch, showCentroidLabels, isProteinHoverEnabled } = this.props;
+
+    if (!showCentroidLabels && isProteinHoverEnabled) {
+      dispatch({
+        type: "toggle protein hover",
+        payload: { enableProteinHover: false },
+      });
+    }
 
     dispatch({
       type: "show centroid labels for category",
@@ -262,38 +277,38 @@ class MenuBar extends React.PureComponent {
             this.handleClipPercentileMinValueChange
           }
         />
-        <Tooltip
-          content="When a category is colored by, show labels on the graph"
-          position="bottom"
-          disabled={graphInteractionMode === "zoom"}
-        >
-          <AnchorButton
-            className={styles.menubarButton}
-            type="button"
-            data-testid="centroid-label-toggle"
-            icon="property"
-            onClick={this.handleCentroidChange}
-            active={showCentroidLabels}
-            intent={showCentroidLabels ? "primary" : "none"}
-            disabled={!isColoredByCategorical}
-          />
-        </Tooltip>
-        <Tooltip
-          content="Click to enable hovering over proteins to reveal their names"
-          position="bottom"
-          disabled={graphInteractionMode === "zoom"}
-        >
-          <AnchorButton
-            className={styles.menubarButton}
-            type="button"
-            data-testid="protein-hover-toggle"
-            icon="hand-up"
-            onClick={this.handleProteinHoverToggle}
-            active={isProteinHoverEnabled}
-            intent={isProteinHoverEnabled ? "primary" : "none"}
-            disabled={!isColoredByCategorical}
-          />
-        </Tooltip>
+        <ButtonGroup className={styles.menubarButton}>
+          <Tooltip
+            content="When a category is colored by, show labels on the graph"
+            position="bottom"
+            disabled={graphInteractionMode === "zoom"}
+          >
+            <AnchorButton
+              type="button"
+              data-testid="centroid-label-toggle"
+              icon="property"
+              onClick={this.handleCentroidChange}
+              active={showCentroidLabels}
+              intent={showCentroidLabels ? "primary" : "none"}
+              disabled={!isColoredByCategorical}
+            />
+          </Tooltip>
+          <Tooltip
+            content="Click to enable hovering over proteins to reveal their names"
+            position="bottom"
+            disabled={graphInteractionMode === "zoom"}
+          >
+            <AnchorButton
+              type="button"
+              data-testid="protein-hover-toggle"
+              icon="hand-up"
+              onClick={this.handleProteinHoverToggle}
+              active={isProteinHoverEnabled}
+              intent={isProteinHoverEnabled ? "primary" : "none"}
+              disabled={!isColoredByCategorical}
+            />
+          </Tooltip>
+        </ButtonGroup>
         <ButtonGroup className={styles.menubarButton}>
           <Tooltip
             content={selectionTooltip}
