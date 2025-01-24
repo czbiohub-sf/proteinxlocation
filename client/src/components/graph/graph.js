@@ -27,7 +27,6 @@ import {
   flagSelected,
   flagHighlight,
 } from "../../util/glHelpers";
-import calcCentroid from "../../util/centroid";
 
 /*
 Simple 2D transforms control all point painting.  There are three:
@@ -334,64 +333,54 @@ class Graph extends React.Component {
 
     if (!annoMatrix || !layoutChoice?.current || !colors?.colorAccessor) return;
 
-    // Get the Regl (WebGL) canvas dimensions
     const rect = this.reglCanvas.getBoundingClientRect();
-
-    // Capture the mouse coordinates relative to the canvas (in pixels)
     const mouseX = event.clientX - rect.left;
     const mouseY = event.clientY - rect.top;
-
-    // Convert mouse coordinates to the data space used for centroids
     const dataXY = this.mapScreenToPoint([mouseX, mouseY]);
 
-    const threshold = 0.002; // Fine adjustment for hover precision
+    const threshold = 0.002;
 
     try {
-      // Determine the correct query for colorByQuery
       const query = this.colorByQuery();
-
       if (!query) {
         console.error("❌ Invalid query for colorByQuery function.");
         return;
       }
 
-      // Fetch the layout and color data using the query
       const [layoutDf, colorDf] = await Promise.all([
         annoMatrix.fetch("emb", layoutChoice.current),
         annoMatrix.fetch(...query),
       ]);
 
-      // Calculate centroids for proteins
-      const centroids = calcCentroid(
-        annoMatrix.schema,
-        colors.colorAccessor,
-        colorDf,
-        layoutChoice,
-        layoutDf
-      );
+      const X = layoutDf.col(layoutChoice.currentDimNames[0]).asArray();
+      const Y = layoutDf.col(layoutChoice.currentDimNames[1]).asArray();
+      const labels = colorDf.col(colors.colorAccessor).asArray();
 
-      // Identify the nearest protein point
-      let foundProteinName = null;
+      let foundIndex = null;
+      let foundLabel = null;
       let foundCoordinates = null;
       let minDist = Infinity;
 
-      centroids.forEach((coords, labelName) => {
-        const dx = coords[0] - dataXY[0];
-        const dy = coords[1] - dataXY[1];
+      for (let i = 0; i < X.length; i += 1) {
+        const dx = X[i] - dataXY[0];
+        const dy = Y[i] - dataXY[1];
         const dist = Math.hypot(dx, dy);
 
         if (dist < minDist) {
           minDist = dist;
-          foundProteinName = labelName;
-          foundCoordinates = coords;
+          foundIndex = i;
+          foundLabel = labels[i];
+          foundCoordinates = [X[i], Y[i]];
         }
-      });
+      }
 
-      // Dispatch hover actions
-      if (minDist < threshold && foundProteinName && foundCoordinates) {
+      if (minDist < threshold && foundIndex !== null && foundCoordinates) {
         dispatch({
           type: "protein hover start",
-          payload: { protein: foundProteinName, coordinates: foundCoordinates },
+          payload: {
+            protein: `${foundLabel} | ${foundIndex}`,
+            coordinates: foundCoordinates,
+          },
         });
       } else {
         dispatch({ type: "protein hover end" });

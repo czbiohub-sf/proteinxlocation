@@ -42,7 +42,7 @@ const HoverProteinLabels = ({
         textAnchor="middle"
         dy="-1" // Moves the text slightly above the point
         style={{
-          fontSize: "2px",
+          fontSize: "4px",
           fontWeight: "bold",
           fill: "black",
           userSelect: "none",
