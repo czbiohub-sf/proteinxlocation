@@ -322,8 +322,13 @@ class MenuBar extends React.PureComponent {
               icon={selectionButtonIcon}
               active={graphInteractionMode === "select"}
               intent={graphInteractionMode === "select" ? "primary" : "none"}
-              disabled={isProteinHoverEnabled}
               onClick={() => {
+                if (isProteinHoverEnabled) {
+                  dispatch({
+                    type: "toggle protein hover",
+                    payload: { enableProteinHover: false },
+                  });
+                }
                 dispatch({
                   type: "change graph interaction mode",
                   data: "select",
