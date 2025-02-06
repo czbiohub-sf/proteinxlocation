@@ -372,14 +372,14 @@ class Graph extends React.Component {
           dispatch({
             type: "protein hover start",
             payload: {
-              protein: `${nearest.label} | ${nearest.index}`,
+              protein: `${nearest.label} | ${nearest.index}`, // Label with actual observation index
               coordinates: [nearest.x, nearest.y],
             },
           });
         } else if (this.lastHoveredProtein !== null) {
-            this.lastHoveredProtein = null;
-            dispatch({ type: "protein hover end" });
-          }
+          this.lastHoveredProtein = null;
+          dispatch({ type: "protein hover end" });
+        }
       } catch (error) {
         console.error("❌ Error in protein hover:", error);
         dispatch({ type: "protein hover end" });
@@ -394,6 +394,10 @@ class Graph extends React.Component {
     this.setState({ viewport, projectionTF });
   };
 
+  /**
+   * Handler for various canvas events.
+   * Passes events to the camera and renders the canvas if needed.
+   */
   handleCanvasEvent = (e) => {
     const { camera, projectionTF } = this.state;
     if (e.type !== "wheel") e.preventDefault();
@@ -524,22 +528,43 @@ class Graph extends React.Component {
   /**
    * Updates the hover quadtree using the provided data.
    *
+   * Modified: Uses the observation index dataframe fetched via annomatrix,
+   * using the column name defined in the schema (schema.annotations.obs.index).
+   *
    * @param {DataFrame} layoutDf - The layout dataframe.
    * @param {DataFrame} colorDf - The color dataframe.
    * @param {Object} colors - Colors configuration.
    * @param {Object} layoutChoice - Layout choice configuration.
+   * @param {DataFrame} indexDf - The dataframe containing the observation index.
    */
-  updateHoverQuadtreeFromData = (layoutDf, colorDf, colors, layoutChoice) => {
+  updateHoverQuadtreeFromData = (
+    layoutDf,
+    colorDf,
+    colors,
+    layoutChoice,
+    indexDf
+  ) => {
     if (!layoutDf || !colorDf || !colors?.colorAccessor) return;
 
-    const {currentDimNames} = layoutChoice;
+    const { currentDimNames } = layoutChoice;
     const X = layoutDf.col(currentDimNames[0]).asArray();
     const Y = layoutDf.col(currentDimNames[1]).asArray();
     const labels = colorDf.col(colors.colorAccessor).asArray();
 
+    let indices = [];
+    if (indexDf) {
+      // Use destructuring to get the obs index column name from the annomatrix schema.
+      const { annoMatrix } = this.props;
+      const { schema } = annoMatrix;
+      const obsIndexName = schema.annotations.obs.index;
+      indices = indexDf.col(obsIndexName).asArray();
+    } else {
+      indices = Array.from({ length: X.length }, (_, i) => i);
+    }
+
     const points = new Array(X.length);
     for (let i = 0; i < X.length; i += 1) {
-      points[i] = { x: X[i], y: Y[i], index: i, label: labels[i] };
+      points[i] = { x: X[i], y: Y[i], index: indices[i], label: labels[i] };
     }
 
     this.hoverQuadtree = d3
@@ -595,7 +620,10 @@ class Graph extends React.Component {
       return { toolSVG: undefined };
     }
 
-    let handleStart; let handleDrag; let handleEnd; let handleCancel;
+    let handleStart;
+    let handleDrag;
+    let handleEnd;
+    let handleCancel;
     if (selectionTool === "brush") {
       handleStart = this.handleBrushStartAction.bind(this);
       handleDrag = this.handleBrushDragAction.bind(this);
@@ -633,7 +661,7 @@ class Graph extends React.Component {
     } = props.watchProps;
     const { modelTF } = this.state;
 
-    const [layoutDf, colorDf, pointDilationDf] = await this.fetchData(
+    const [layoutDf, colorDf, pointDilationDf, indexDf] = await this.fetchData(
       annoMatrix,
       layoutChoice,
       colorsProp,
@@ -671,9 +699,10 @@ class Graph extends React.Component {
       flags,
       width,
       height,
-      layoutDf, // Store layoutDf.
-      colorDf, // Store colorDf.
-      pointDilationDf, // Store pointDilationDf.
+      layoutDf, // Store layout dataframe.
+      colorDf, // Store color dataframe.
+      pointDilationDf, // Store point dilation dataframe.
+      indexDf, // Store observation index dataframe.
     };
   };
 
@@ -704,13 +733,14 @@ class Graph extends React.Component {
     // Destructure asyncProps.
     const {
       positions,
-      colors, // async color data
+      colors,
       flags,
       width,
       height,
       layoutDf,
       colorDf,
       pointDilationDf,
+      indexDf,
     } = asyncProps;
 
     // Update state with new data.
@@ -718,7 +748,7 @@ class Graph extends React.Component {
       layoutState: {
         ...prevState.layoutState,
         layoutDf: layoutDf || prevState.layoutState.layoutDf,
-        layoutChoice, // same as layoutChoice: layoutChoice,
+        layoutChoice,
       },
       colorState: {
         ...prevState.colorState,
@@ -745,7 +775,8 @@ class Graph extends React.Component {
         layoutDf,
         colorDf,
         propColors,
-        layoutChoice
+        layoutChoice,
+        indexDf
       );
       this.lastHoveredProtein = null;
     }
@@ -785,20 +816,24 @@ class Graph extends React.Component {
     return createColorQuery(colorMode, colorAccessor, schema, genesets);
   }
 
+  // ----------------- End of custom methods -----------------
+  // Only one fetchData definition is maintained.
+  /**
+   * Modified fetchData to also fetch the observation index using the column name defined in the schema.
+   *
+   * @param {Object} annoMatrix - The annotation matrix.
+   * @param {Object} layoutChoice - Layout choice configuration.
+   * @param {Object} colors - Colors configuration.
+   * @param {Object} pointDilation - Point dilation configuration.
+   * @returns {Promise<Array>} A promise that resolves to an array containing layout, color, pointDilation, and index data.
+   */
   async fetchData(annoMatrix, layoutChoice, colors, pointDilation) {
-    /*
-    Fetch all necessary data:
-      - the color-by dataframe,
-      - the layout dataframe,
-      - the point dilation dataframe.
-    */
     const { metadataField: pointDilationAccessor } = pointDilation;
-
     const promises = [];
-    // Layout.
+    // Fetch layout ("emb")
     promises.push(annoMatrix.fetch("emb", layoutChoice.current));
 
-    // Color.
+    // Fetch color data.
     const query = this.createColorByQuery(colors);
     if (query) {
       promises.push(annoMatrix.fetch(...query));
@@ -806,12 +841,16 @@ class Graph extends React.Component {
       promises.push(Promise.resolve(null));
     }
 
-    // Point highlighting.
+    // Fetch point dilation data if available.
     if (pointDilationAccessor) {
       promises.push(annoMatrix.fetch("obs", pointDilationAccessor));
     } else {
       promises.push(Promise.resolve(null));
     }
+
+    // Fetch observation index using the column name from the schema.
+    const obsIndexName = annoMatrix.schema.annotations.obs.index;
+    promises.push(annoMatrix.fetch("obs", obsIndexName));
 
     return Promise.all(promises);
   }
@@ -826,8 +865,8 @@ class Graph extends React.Component {
 
       if (currentSelection.mode === "within-rect") {
         const screenCoords = [
-          this.mapPointToScreen(currentSelection.brushCoords.northwest),
-          this.mapPointToScreen(currentSelection.brushCoords.southeast),
+          this.mapScreenToPoint(currentSelection.brushCoords.northwest),
+          this.mapScreenToPoint(currentSelection.brushCoords.southeast),
         ];
         if (!toolCurrentSelection) {
           container.call(tool.move, screenCoords);
@@ -875,7 +914,7 @@ class Graph extends React.Component {
         this.brushToolUpdate(tool, container);
         break;
       case "lasso":
-        this.lassoToolUpdate(tool, container);
+        this.lassoToolUpdate(tool);
         break;
       default:
         break;
@@ -1108,7 +1147,6 @@ const StillLoading = ({ displayName, width, height }) => (
       style={{
         display: "flex",
         justifyContent: "center",
-        justifyItems: "center",
         alignItems: "center",
       }}
     >
