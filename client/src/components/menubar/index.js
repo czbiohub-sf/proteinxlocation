@@ -42,6 +42,7 @@ import { getEmbSubsetView } from "../../util/stateManager/viewStackHelpers";
     diffexpMayBeSlow:
       state.config?.parameters?.["diffexp-may-be-slow"] ?? false,
     showCentroidLabels: state.centroidLabels.showLabels,
+    isProteinHoverEnabled: state.proteinHover?.isEnabled ?? false,
     tosURL: state.config?.parameters?.about_legal_tos,
     privacyURL: state.config?.parameters?.about_legal_privacy,
     categoricalSelection: state.categoricalSelection,
@@ -131,6 +132,35 @@ class MenuBar extends React.PureComponent {
     });
   };
 
+  handleProteinHoverToggle = () => {
+    const {
+      dispatch,
+      isProteinHoverEnabled,
+      showCentroidLabels,
+      graphInteractionMode,
+    } = this.props;
+
+    // If in select mode, automatically switch to zoom/pan mode.
+    if (graphInteractionMode === "select") {
+      dispatch({
+        type: "change graph interaction mode",
+        data: "zoom",
+      });
+    }
+
+    if (!isProteinHoverEnabled && showCentroidLabels) {
+      dispatch({
+        type: "show centroid labels for category",
+        showLabels: false,
+      });
+    }
+
+    dispatch({
+      type: "toggle protein hover",
+      payload: { enableProteinHover: !isProteinHoverEnabled },
+    });
+  };
+
   handleClipPercentileMaxValueChange = (v) => {
     /*
     Ignore anything that isn't a legit number
@@ -173,7 +203,14 @@ class MenuBar extends React.PureComponent {
   };
 
   handleCentroidChange = () => {
-    const { dispatch, showCentroidLabels } = this.props;
+    const { dispatch, showCentroidLabels, isProteinHoverEnabled } = this.props;
+
+    if (!showCentroidLabels && isProteinHoverEnabled) {
+      dispatch({
+        type: "toggle protein hover",
+        payload: { enableProteinHover: false },
+      });
+    }
 
     dispatch({
       type: "show centroid labels for category",
@@ -202,6 +239,7 @@ class MenuBar extends React.PureComponent {
       clipPercentileMax,
       graphInteractionMode,
       showCentroidLabels,
+      isProteinHoverEnabled,
       categoricalSelection,
       colorAccessor,
       subsetPossible,
@@ -252,22 +290,37 @@ class MenuBar extends React.PureComponent {
             this.handleClipPercentileMinValueChange
           }
         />
-        <Tooltip
-          content="When a category is colored by, show labels on the graph"
-          position="bottom"
-          disabled={graphInteractionMode === "zoom"}
-        >
-          <AnchorButton
-            className={styles.menubarButton}
-            type="button"
-            data-testid="centroid-label-toggle"
-            icon="property"
-            onClick={this.handleCentroidChange}
-            active={showCentroidLabels}
-            intent={showCentroidLabels ? "primary" : "none"}
-            disabled={!isColoredByCategorical}
-          />
-        </Tooltip>
+        <ButtonGroup className={styles.menubarButton}>
+          <Tooltip
+            content="When a category is colored by, show labels on the graph"
+            position="bottom"
+            disabled={graphInteractionMode === "zoom"}
+          >
+            <AnchorButton
+              type="button"
+              data-testid="centroid-label-toggle"
+              icon="property"
+              onClick={this.handleCentroidChange}
+              active={showCentroidLabels}
+              intent={showCentroidLabels ? "primary" : "none"}
+              disabled={!isColoredByCategorical}
+            />
+          </Tooltip>
+          <Tooltip
+            content="Click to enable hovering over proteins to reveal their names"
+            position="bottom"
+          >
+            <AnchorButton
+              type="button"
+              data-testid="protein-hover-toggle"
+              icon="hand-up"
+              onClick={this.handleProteinHoverToggle}
+              active={isProteinHoverEnabled}
+              intent={isProteinHoverEnabled ? "primary" : "none"}
+              disabled={!isColoredByCategorical}
+            />
+          </Tooltip>
+        </ButtonGroup>
         <ButtonGroup className={styles.menubarButton}>
           <Tooltip
             content={selectionTooltip}
@@ -279,7 +332,14 @@ class MenuBar extends React.PureComponent {
               data-testid="mode-lasso"
               icon={selectionButtonIcon}
               active={graphInteractionMode === "select"}
+              intent={graphInteractionMode === "select" ? "primary" : "none"}
               onClick={() => {
+                if (isProteinHoverEnabled) {
+                  dispatch({
+                    type: "toggle protein hover",
+                    payload: { enableProteinHover: false },
+                  });
+                }
                 dispatch({
                   type: "change graph interaction mode",
                   data: "select",
@@ -297,6 +357,7 @@ class MenuBar extends React.PureComponent {
               data-testid="mode-pan-zoom"
               icon="zoom-in"
               active={graphInteractionMode === "zoom"}
+              intent={graphInteractionMode === "zoom" ? "primary" : "none"}
               onClick={() => {
                 dispatch({
                   type: "change graph interaction mode",
