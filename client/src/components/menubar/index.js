@@ -133,7 +133,20 @@ class MenuBar extends React.PureComponent {
   };
 
   handleProteinHoverToggle = () => {
-    const { dispatch, isProteinHoverEnabled, showCentroidLabels } = this.props;
+    const {
+      dispatch,
+      isProteinHoverEnabled,
+      showCentroidLabels,
+      graphInteractionMode,
+    } = this.props;
+
+    // If in select mode, automatically switch to zoom/pan mode.
+    if (graphInteractionMode === "select") {
+      dispatch({
+        type: "change graph interaction mode",
+        data: "zoom",
+      });
+    }
 
     if (!isProteinHoverEnabled && showCentroidLabels) {
       dispatch({
@@ -304,9 +317,7 @@ class MenuBar extends React.PureComponent {
               onClick={this.handleProteinHoverToggle}
               active={isProteinHoverEnabled}
               intent={isProteinHoverEnabled ? "primary" : "none"}
-              disabled={
-                !isColoredByCategorical || graphInteractionMode !== "zoom"
-              }
+              disabled={!isColoredByCategorical}
             />
           </Tooltip>
         </ButtonGroup>
